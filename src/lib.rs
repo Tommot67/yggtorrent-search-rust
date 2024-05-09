@@ -18,13 +18,11 @@ mod tests {
         options.subcategory = YggSubCategory::Livres;
         options.order = Some((YggOrder::Ascendant, YggOrderElement::TelechargementComplet));
         let result = client.search("rust", Some(options)).await;
-
         for torrent in result.clone() {
             println!("{torrent}");
         }
 
         println!("{:?}", client.download_torrent(result.last().unwrap().clone(), "./torrent/test.torrent".to_string()).await.unwrap()); //error login
         println!("{}", YggClient::create_magnet_link(result.last().unwrap().clone()));
-        
     }
 }

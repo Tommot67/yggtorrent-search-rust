@@ -174,6 +174,12 @@ impl YggClient {
 
             println!("{}", search_url);
         }
+        else {
+            let options = YggParams::default();
+            search_url = options.concat_to_url(search_url.as_str()).to_string();
+
+            println!("{}", search_url);
+        }
 
         if self.last_url != search_url {
             self.last_url = search_url.to_string();
@@ -186,24 +192,28 @@ impl YggClient {
     }
 
     async fn scrape_level_1(&mut self, mut url: String) -> Result<(), ()> {
-
+        let mut page = 0;
+        let mut local_url = url.clone();
         loop {
             let html = self.client.
-                get(url.clone()).header("User-Agent", USER_AGENT).header("Cookie", self.work_clearence().await.unwrap()).send().await.unwrap().text().await.unwrap();
+                get(local_url).header("User-Agent", USER_AGENT).header("Cookie", self.work_clearence().await.unwrap()).send().await.unwrap().text().await.unwrap();
 
             let document = Html::parse_document(html.as_str());
 
-            for element in document.select(&LINK_TORRENT_PAGE_SELECTOR) {
-                self.scrape_level_2(get_data(element, LINK_TORREN_PAGE_ATTRIBUT.clone())).await.unwrap();
-            }
+            let mut elements = document.select(&LINK_TORRENT_PAGE_SELECTOR);
 
-            let element = document.select(&LINK_NEXT_PAGE_SELECTOR).next();
 
-            if element.is_some() {
-                url = get_data(element.unwrap(), LINK_TORREN_PAGE_ATTRIBUT.clone());
+            if elements.clone().next().is_none() {
+                return Ok(());
             }
             else {
-                return Ok(());
+                page += 1;
+                local_url = format!("{}&page={}", url.clone() , page * 50).to_string();
+                println!("{}", local_url);
+            }
+
+            for element in elements {
+                self.scrape_level_2(get_data(element, LINK_TORREN_PAGE_ATTRIBUT.clone())).await.unwrap();
             }
         }
     }
