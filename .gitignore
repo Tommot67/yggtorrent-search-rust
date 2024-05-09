@@ -1,0 +1,6 @@
+/target
+/torrent
+Cargo.lock
+chromedriver*
+*chromedriver
+.idea
