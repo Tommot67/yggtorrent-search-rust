@@ -1,3 +1,3 @@
 pub(crate) mod yggtorrent_cookie;
-pub(crate) mod yggtorrent_result;
-pub(crate) mod yggtorrent_ratio;
+pub mod yggtorrent_result;
+pub mod yggtorrent_ratio;

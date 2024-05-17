@@ -1,8 +1,8 @@
-mod data_struct;
-pub mod selector;
+pub mod data_struct;
+pub(crate) mod selector;
 pub mod yggtorrent_client;
 pub mod yggtorrent_params;
-mod tracker_list;
+pub(crate) mod tracker_list;
 
 
 #[cfg(test)]

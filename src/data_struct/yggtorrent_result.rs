@@ -95,9 +95,11 @@ impl Display for YggResult {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, Getters)]
 pub struct YggResultFile {
+    #[getset(get = "pub")]
     size: String,
+    #[getset(get = "pub")]
     filename: String,
 }
 
