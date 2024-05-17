@@ -23,17 +23,14 @@ use crate::tracker_list::TRACKERS;
 const WEBSITE_BASE_URL: &'static str = "https://www3.yggtorrent.cool/";
 const USER_AGENT: &'static str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
-#[derive(Debug, Clone, Getters)]
+#[derive(Debug, Clone)]
 pub struct YggClient {
     website: &'static str,
     username: String,
     password: String,
     clearence_cookie: Vec<YggCookie>,
-    #[getset(get = "pub")]
     last_url: String,
-    #[getset(get = "pub")]
     result: Vec<YggResult>,
-    #[getset(get = "pub")]
     ratio: YggRatio,
     client: Client,
 }
@@ -290,6 +287,18 @@ impl YggClient {
         }
 
         magnet_url
+    }
+
+    pub fn get_last_url(&self) -> String {
+        self.last_url.clone()
+    }
+
+    pub fn get_last_result(&self) -> Vec<YggResult> {
+        self.result.clone()
+    }
+
+    pub fn get_last_ratio(&self) -> YggRatio {
+        self.ratio.clone()
     }
 
 }
