@@ -2,13 +2,13 @@ use std::fmt::{Debug, Display, Formatter};
 use chrono::NaiveDateTime;
 use getset::Getters;
 use scraper::{ElementRef, Html};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use crate::selector::get_data;
 use crate::selector::selector_level_2::*;
 use crate::selector::selector_level_3::*;
 
 
-#[derive(Debug, Default, Clone, Getters)]
+#[derive(Debug, Default, Clone, Getters, Serialize, Deserialize)]
 pub struct YggResult {
     #[getset(get = "pub")]
     id: u64,
@@ -95,7 +95,7 @@ impl Display for YggResult {
     }
 }
 
-#[derive(Debug, Default, Clone, Getters)]
+#[derive(Debug, Default, Clone, Getters, Serialize, Deserialize)]
 pub struct YggResultFile {
     #[getset(get = "pub")]
     size: String,
