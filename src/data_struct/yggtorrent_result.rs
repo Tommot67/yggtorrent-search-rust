@@ -8,7 +8,7 @@ use crate::selector::selector_level_2::*;
 use crate::selector::selector_level_3::*;
 
 
-#[derive(Debug, Default, Clone, Getters, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, Getters)]
 pub struct YggResult {
     #[getset(get = "pub")]
     id: u64,

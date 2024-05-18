@@ -1,19 +1,18 @@
 [package]
 name = "yggtorrent-search"
-version = "1.2.1"
+version = "2.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-reqwest = { version = "0.12", features = ["json"] }
+ureq = { version = "2.9.7", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
-serde = "1.0.201"
+serde = { version = "1.0.201", features = ["derive"] }
 scraper = "0.19.0"
 chrono = "0.4.38"
 lazy_static = "1.4.0"
 getset = "0.1.2"
-undetected-chromedriver = { git = "https://github.com/Tommot67/undetected_chromedriver_operational.git", version = "0.1.3" }
 serde_json = "1.0.116"
 percent-encoding = "2.3.1"
 async-recursion = "1.1.1"
