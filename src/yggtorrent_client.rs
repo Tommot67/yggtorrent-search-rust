@@ -37,7 +37,7 @@ pub struct YggClient {
 }
 
 #[async_trait(?Send)]
-pub trait YggTraitAsync {
+pub trait YggTraitAsync: Send + Sync {
     async fn new(username: String, password: String) -> YggClient ;
     async fn change_username(&mut self, username: String) ;
     async fn change_password(&mut self, password: String) ;
@@ -56,7 +56,7 @@ pub trait YggTrait {
 }
 
 #[async_trait(?Send)]
-pub(crate) trait YggTraitAsyncCrate {
+pub(crate) trait YggTraitAsyncCrate: Send + Sync {
     async fn get_clearence(&mut self);
     async fn work_cookies(&mut self) -> Result<String, ()>;
 }
@@ -66,7 +66,7 @@ pub(crate) trait YggTraitCrate {
 }
 
 #[async_trait(?Send)]
-trait YggTraitAsyncMod {
+trait YggTraitAsyncMod: Send + Sync {
     async fn scrape_level_1(&mut self, url: String) ;
     async fn scrape_level_2(&mut self, url: String) ;
     async fn scrape_level_3(&mut self, id: u64) -> Result<Vec<YggResultFile>,()>;
