@@ -8,11 +8,11 @@ pub(crate) mod tracker_list;
 #[cfg(test)]
 mod tests {
     use crate::yggtorrent_params::{YggCategory, YggOrder, YggOrderElement, YggParams, YggSubCategory};
-    use crate::yggtorrent_client::YggClient;
+    use crate::yggtorrent_client::{YggClient, YggTrait, YggTraitAsync};
 
     #[tokio::test]
     async fn it_works() {
-        let mut client = YggClient::new("tommot67".to_string(), "20*PQ-mz".to_string()).await;
+        let mut client = YggClient::new("admin".to_string(), "adminadmin".to_string()).await;
         let mut options = YggParams::default();
         options.category = YggCategory::Ebook;
         options.subcategory = YggSubCategory::Livres;

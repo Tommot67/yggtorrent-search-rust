@@ -1,6 +1,6 @@
 [package]
 name = "yggtorrent-search"
-version = "1.0.3"
+version = "1.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -18,6 +18,7 @@ serde_json = "1.0.116"
 percent-encoding = "2.3.1"
 async-recursion = "1.1.1"
 bytes = "1.6.0"
+async-trait = "0.1.80"
 
 [warn]
 unused_assignments = "warn"
