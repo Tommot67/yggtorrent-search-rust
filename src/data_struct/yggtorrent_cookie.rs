@@ -20,11 +20,11 @@ impl YggCookie {
 
         let expires: Vec<&str> = datas
             .iter()
-            .filter(|&&s| s.contains("Expires"))
+            .filter(|&&s| s.contains("Expires") || s.contains("expires"))
             .copied()
             .collect();
 
-        self.date_expire = NaiveDateTime::parse_from_str(expires.first().unwrap().split("=").collect::<Vec<&str>>()[1].trim_start(), "%a, %d %b %Y %H:%M:%S GMT").unwrap();
+        self.date_expire = NaiveDateTime::parse_from_str(&*expires.first().unwrap().split("=").collect::<Vec<&str>>()[1].trim_start().replace("-", " "), "%a, %d %b %Y %H:%M:%S GMT").unwrap();
     }
 
     pub(crate) fn check_validity(&self) -> bool {

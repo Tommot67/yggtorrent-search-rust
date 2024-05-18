@@ -1,4 +1,4 @@
-use std::fmt::{Display, Formatter, write};
+use std::fmt::{Display, Formatter};
 use getset::Getters;
 use scraper::Html;
 use crate::selector::get_data;

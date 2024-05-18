@@ -12,7 +12,7 @@ mod tests {
 
     #[tokio::test]
     async fn it_works() {
-        let mut client = YggClient::new("admin".to_string(), "adminadmin".to_string()).await;
+        let mut client = YggClient::new("tommot67".to_string(), "20*PQ-mz".to_string()).await;
         let mut options = YggParams::default();
         options.category = YggCategory::Ebook;
         options.subcategory = YggSubCategory::Livres;

@@ -28,7 +28,7 @@ impl YggCategory {
         unsafe { *(self as *const YggCategory as *const u32) }
     }
 
-    #[warn(unused_assignments)]
+    #[allow(unused_assignments)]
     pub(crate) fn have_this_subcategory(&self, subcategory: &YggSubCategory) -> bool {
         let mut min: u32 = 0;
         let mut max: u32 = 0;
