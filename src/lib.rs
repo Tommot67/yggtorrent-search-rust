@@ -7,8 +7,8 @@ pub(crate) mod tracker_list;
 
 #[cfg(test)]
 mod tests {
+    use crate::yggtorrent_client::YggClient;
     use crate::yggtorrent_params::{YggCategory, YggOrder, YggOrderElement, YggParams, YggSubCategory};
-    use crate::yggtorrent_client::{YggClient, YggTrait, YggTraitAsync};
 
     #[tokio::test]
     async fn it_works() {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
-use async_trait::async_trait;
+use async_recursion::async_recursion;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 
 use crate::data_struct::yggtorrent_cookie::YggCookie;
@@ -36,65 +36,29 @@ pub struct YggClient {
     client: Client,
 }
 
-#[async_trait(?Send)]
-pub trait YggTraitAsync {
-    async fn new(username: String, password: String) -> YggClient ;
-    async fn change_username(&mut self, username: String) ;
-    async fn change_password(&mut self, password: String) ;
-    async fn login(&mut self) -> Result<String, String> ;
-    async fn get_ratio(&mut self) -> Result<YggRatio, ()>;
-    async fn search(&mut self, name: &str, options: Option<YggParams>) -> Vec<YggResult>;
-    async fn download_torrent(&mut self, torrent: YggResult, path: String) -> Result<(), String>;
-
-}
-
-pub trait YggTrait {
-    fn create_magnet_link(torrent: YggResult) -> String ;
-    fn get_last_url(&self) -> String ;
-    fn get_last_result(&self) -> Vec<YggResult> ;
-    fn get_last_ratio(&self) -> YggRatio ;
-}
-
-#[async_trait(?Send)]
-pub(crate) trait YggTraitAsyncCrate {
-    async fn get_clearence(&mut self);
-    async fn work_cookies(&mut self) -> Result<String, ()>;
-}
-
-pub(crate) trait YggTraitCrate {
-    fn create_cookies(&self) -> Result<String, &str>;
-}
-
-#[async_trait(?Send)]
-trait YggTraitAsyncMod {
-    async fn scrape_level_1(&mut self, url: String) ;
-    async fn scrape_level_2(&mut self, url: String) ;
-    async fn scrape_level_3(&mut self, id: u64) -> Result<Vec<YggResultFile>,()>;
-}
-
-
 #[allow(dead_code)]
-#[async_trait(?Send)]
-impl YggTraitAsync for YggClient {
 
-    async fn new(username: String, password: String) -> YggClient {
+impl YggClient {
+
+    pub async fn new(username: String, password: String) -> YggClient {
         let mut temp = YggClient {website: WEBSITE_BASE_URL,  username, password, cookies: Vec::new() , last_url: "".to_string() , result: Arc::new(Mutex::new(Vec::new())), ratio: YggRatio::default() , client:  Client::new() };
-        temp.login().await.expect("Can't'login");
+        temp.login().await.expect("Can't login");
         //temp.get_clearence().await;
         temp
     }
 
-    async fn change_username(&mut self, username: String) {
+    pub async fn change_username(&mut self, username: String) {
         self.username = username;
         self.login().await.expect("Can't'login");
     }
 
-    async fn change_password(&mut self, password: String) {
+    pub async fn change_password(&mut self, password: String) {
         self.password = password;
         self.login().await.expect("Can't login");
     }
 
-    async fn login(&mut self) -> Result<String, String> {
+    #[async_recursion]
+    pub async fn login(&mut self) -> Result<String, String> {
 
         let temp = self.website.to_string() + "auth/process_login";
         let login_url = temp.as_str();
@@ -136,7 +100,7 @@ impl YggTraitAsync for YggClient {
         Ok(temp)
     }
 
-    async fn get_ratio(&mut self) -> Result<YggRatio, ()> {
+    pub async fn get_ratio(&mut self) -> Result<YggRatio, ()> {
 
         let html = self.client.
             get(self.website).header("User-Agent", USER_AGENT).header("Cookie", self.work_cookies().await.unwrap()).send().await.unwrap().text().await.unwrap();
@@ -150,7 +114,7 @@ impl YggTraitAsync for YggClient {
         Ok(ratio)
     }
 
-    async fn search(&mut self, name: &str, options: Option<YggParams>) -> Vec<YggResult> {
+    pub async fn search(&mut self, name: &str, options: Option<YggParams>) -> Vec<YggResult> {
 
         let mut search_url = self.website.to_string() + "engine/search?name=" + name + "&do=search";
 
@@ -178,7 +142,7 @@ impl YggTraitAsync for YggClient {
 
     }
 
-    async fn download_torrent(&mut self, torrent: YggResult, path: String) -> Result<(), String> {
+    pub async fn download_torrent(&mut self, torrent: YggResult, path: String) -> Result<(), String> {
 
         let bytes =  self.client.
             get(torrent.download_link()).header("User-Agent", USER_AGENT).header("Cookie", self.work_cookies().await.unwrap()).send().await.unwrap().bytes().await.unwrap();
@@ -204,11 +168,7 @@ impl YggTraitAsync for YggClient {
         Ok(())
     }
 
-}
-
-impl YggTrait for YggClient {
-
-    fn create_magnet_link(torrent: YggResult) -> String {
+    pub fn create_magnet_link(torrent: YggResult) -> String {
 
         let mut magnet_url =  format!("magnet:?xt=urn:btih:{}&dn={}", torrent.info_hash(), utf8_percent_encode(torrent.name(), NON_ALPHANUMERIC));
 
@@ -219,11 +179,11 @@ impl YggTrait for YggClient {
         magnet_url
     }
 
-    fn get_last_url(&self) -> String {
+    pub fn get_last_url(&self) -> String {
         self.last_url.clone()
     }
 
-    fn get_last_result(&self) -> Vec<YggResult> {
+    pub fn get_last_result(&self) -> Vec<YggResult> {
         let rt = Runtime::new().unwrap();
         let results = rt.block_on(async {
             let results = self.result.lock().await;
@@ -232,14 +192,9 @@ impl YggTrait for YggClient {
         results
     }
 
-    fn get_last_ratio(&self) -> YggRatio {
+    pub fn get_last_ratio(&self) -> YggRatio {
         self.ratio.clone()
     }
-
-}
-
-#[async_trait(?Send)]
-impl YggTraitAsyncCrate for YggClient {
 
     async fn get_clearence(&mut self) {
 
@@ -268,6 +223,7 @@ impl YggTraitAsyncCrate for YggClient {
         self.login().await.expect("Login ERROR");
     }
 
+
     async fn work_cookies(&mut self) -> Result<String, ()> {
         let mut cook = self.create_cookies();
 
@@ -284,9 +240,6 @@ impl YggTraitAsyncCrate for YggClient {
         Ok(cook.unwrap())
     }
 
-}
-
-impl YggTraitCrate for YggClient {
     fn create_cookies(&self) -> Result<String, &str> {
 
         let mut temp: String = "".to_string();
@@ -307,12 +260,7 @@ impl YggTraitCrate for YggClient {
         Ok(temp.to_owned())
     }
 
-}
-
-#[async_trait(?Send)]
-impl YggTraitAsyncMod for YggClient {
-
-    async fn scrape_level_1(&mut self, url: String)  {
+    async fn scrape_level_1(&mut self, url: String) {
         let mut page = 0;
         let mut local_url = url.clone();
         loop {
@@ -326,13 +274,12 @@ impl YggTraitAsyncMod for YggClient {
 
             if elements.clone().next().is_some() {
                 page += 1;
-                local_url = format!("{}&page={}", url.clone() , page * 50).to_string();
+                local_url = format!("{}&page={}", url.clone(), page * 50).to_string();
 
                 for element in elements {
                     self.scrape_level_2(get_data(element, LINK_TORRENT_PAGE_ATTRIBUT.clone())).await;
                 }
-            }
-            else {
+            } else {
                 break;
             }
         }
