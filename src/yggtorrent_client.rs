@@ -36,6 +36,14 @@ pub struct YggClient {
     client: Client,
 }
 
+unsafe impl Send for YggClient {
+
+}
+
+unsafe impl Sync for YggClient {
+
+}
+
 #[allow(dead_code)]
 
 impl YggClient {
