@@ -60,7 +60,7 @@ impl YggResult {
         result.uploaded = NaiveDateTime::parse_from_str(get_data(document.select(&UPLOADED_SELECTOR).next().unwrap(), &UPLOADED_ATTRIBUT).trim_start().trim_end(), "%d/%m/%Y %H:%M").unwrap_or(NaiveDateTime::default());
         result.download_link = get_data(document.select(&DOWNLOAD_LINK_SELECTOR).next().unwrap(), &DOWNLOAD_LINK_ATTRIBUT);
         result.id = result.download_link.splitn(2, '=').nth(1).unwrap().parse::<u64>().unwrap();
-        result.nfo_link = format!("https://www3.yggtorrent.cool/engine/get_nfo?torrent={}", result.id);
+        result.nfo_link = format!("https://www.ygg.re/engine/get_nfo?torrent={}", result.id);
 
         result
     }

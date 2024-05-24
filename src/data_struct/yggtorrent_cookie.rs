@@ -1,4 +1,4 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::{Duration, NaiveDateTime, Utc};
 
 #[derive(Debug, Clone)]
 pub struct YggCookie {
@@ -28,7 +28,8 @@ impl YggCookie {
     }
 
     pub(crate) fn check_validity(&self) -> bool {
-        self.date_expire.gt(&(Utc::now().naive_utc()))
+        // add to have 30 sec margin
+        self.date_expire.gt(&((Utc::now() +  Duration::seconds(30)).naive_utc()))
     }
 
     pub(crate) fn get_cookie(&self) -> Result<&str, &str> {

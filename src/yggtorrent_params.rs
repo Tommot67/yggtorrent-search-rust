@@ -1,4 +1,5 @@
 #[derive(Clone, Copy, Debug)]
+#[derive(PartialOrd, PartialEq)]
 #[repr(u32)]
 pub enum YggCategory {
     All = 0,
@@ -10,6 +11,7 @@ pub enum YggCategory {
     Print3D = 2200,
     Emulation = 2141,
     GPS = 2143,
+    XXX = 2188,
 }
 
 impl YggCategory {
@@ -66,6 +68,10 @@ impl YggCategory {
                 min = 2168;
                 max = 2170;
             }
+            YggCategory::XXX => {
+                min = 2189;
+                max = 2402;
+            }
             _ => {
                 min = 0;
                 max = 0;
@@ -78,6 +84,7 @@ impl YggCategory {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[derive(PartialOrd, PartialEq)]
 #[repr(u32)]
 pub enum YggSubCategory {
     All = 0,
@@ -132,6 +139,13 @@ pub enum YggSubCategory {
     Applications = 2168,
     Cartes = 2169,
     Divers = 2170,
+    //XXX (between 2189 and 2402)
+    Ebook = 2401,
+    XXXfilm = 2189,
+    Hentai = 2190,
+    Image = 2191,
+    Jeux = 2402,
+
 }
 
 impl YggSubCategory {
@@ -209,28 +223,49 @@ impl YggOrder {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Clone, Copy, Debug)]
+pub enum YggSaison {
+    SerieIntegrale,
+    HorsSaison,
+    Nan,
+    Num(u8), //max 30
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum YggEpisode {
+    SaisonComplete,
+    Num(u8),
+    Nan,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum YggQualite {
+
+}
+
+#[derive(Debug, Clone)]
 pub struct YggParams {
     pub category: YggCategory,
     pub subcategory: YggSubCategory,
     pub uploader: Option<&'static str>,
-    pub order: Option<(YggOrder,YggOrderElement)>
+    pub order: Option<(YggOrder,YggOrderElement)>,
+    pub other: Option<String>,
 }
 
 impl Default for YggParams {
     fn default() -> YggParams {
-        YggParams { category: YggCategory::All , subcategory: YggSubCategory::All , uploader: None , order: None}
+        YggParams { category: YggCategory::All , subcategory: YggSubCategory::All , uploader: None , order: None, other: None}
     }
 }
 
 impl YggParams {
     pub fn get_options_url(&self) -> &str {
         if self.category.have_this_subcategory(&self.subcategory) {
-            let base_url = format!("{}{}{}{}", self.category.get_base_url(), self.subcategory.get_base_url() , self.get_uploader_base_url(), self.get_order_base_url());
+            let base_url = format!("{}{}{}{}{}", self.category.get_base_url(), self.subcategory.get_base_url() , self.get_uploader_base_url(), self.get_order_base_url(), self.clone().other.unwrap_or("".to_string()).as_str());
             Box::leak(base_url.into_boxed_str())
         }
         else {
-            let base_url = format!("{}{}{}{}", self.category.get_base_url(), YggSubCategory::All.get_base_url(), self.get_uploader_base_url(), self.get_order_base_url());
+            let base_url = format!("{}{}{}{}{}", self.category.get_base_url(), YggSubCategory::All.get_base_url(), self.get_uploader_base_url(), self.get_order_base_url(), self.clone().other.unwrap_or("".to_string()).as_str());
             Box::leak(base_url.into_boxed_str())
         }
     }
@@ -257,6 +292,55 @@ impl YggParams {
         }
         else {
             ""
+        }
+    }
+
+    fn get_base_url_saison(saison: YggSaison) -> String {
+        match saison {
+            YggSaison::SerieIntegrale => "&option_saison%5B%5D=1".to_string(),
+            YggSaison::HorsSaison => "&option_saison%5B%5D=2".to_string(),
+            YggSaison::Nan => "&option_saison%5B%5D=3".to_string(),
+            YggSaison::Num(d) if d <= 30 => format!("&option_saison%5B%5D={}", (d + 3)),
+            _ => "".to_string(),
+        }
+    }
+
+    fn get_base_url_episode(episode: YggEpisode) -> String {
+        match episode {
+            YggEpisode::SaisonComplete => "&option_episode%5B%5D=1".to_string(),
+            YggEpisode::Num(d) if d <= 60 => format!("&option_episode%5B%5D={}", (d + 1)),
+            YggEpisode::Nan => "&option_episode%5B%5D=62".to_string(),
+            _ => "".to_string(),
+        }
+    }
+
+    pub fn create_other_serie(&self, saisons: Option<Vec<YggSaison>>, episodes: Option<Vec<YggEpisode>>) -> String {
+        let mut temp  = String::new();
+        if self.category == YggCategory::FilmVideo && (self.subcategory == YggSubCategory::SerieTV || self.subcategory == YggSubCategory::AnimationSerie || self.subcategory == YggSubCategory::EmissionTV) {
+            if saisons.is_some() {
+                for saison in saisons.unwrap() {
+                    temp.push_str(Self::get_base_url_saison(saison).as_str());
+                }
+            }
+            if episodes.is_some() {
+                for episode in episodes.unwrap() {
+                    temp.push_str(Self::get_base_url_episode(episode).as_str());
+                }
+            }
+            temp
+        }
+        else {
+            "".to_string()
+        }
+    }
+
+    pub fn create_other_qualite(&self, qualites: Vec<YggQualite>) -> String {
+        if self.category != YggCategory::FilmVideo {
+            "".to_string()
+        }
+        else {
+            //TODO: implement code here
+            "".to_string()
         }
     }
 

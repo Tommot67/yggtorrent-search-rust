@@ -1,12 +1,16 @@
+use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
+use std::sync::Arc;
+use futures::executor;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
+use reqwest::Client;
 
 use crate::data_struct::yggtorrent_cookie::YggCookie;
 
 use scraper::{Html, Selector};
-use bytes::Bytes;
-use ureq::Agent;
+use tokio::task;
+use tokio::task::{JoinHandle, spawn_blocking};
 use crate::data_struct::yggtorrent_ratio::YggRatio;
 use crate::data_struct::yggtorrent_result::{HtmlContent, YggResult, YggResultFile};
 use crate::yggtorrent_params::YggParams;
@@ -19,73 +23,64 @@ const USER_AGENT: &'static str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/53
 
 #[derive(Debug, Clone)]
 pub struct YggClient {
-    website: &'static str,
     username: String,
     password: String,
     cookies: Vec<YggCookie>,
     last_url: String,
     result: Vec<YggResult>,
     ratio: YggRatio,
-    client: Agent,
-}
-
-unsafe impl Send for YggClient {
-
-}
-
-unsafe impl Sync for YggClient {
-
 }
 
 #[allow(dead_code)]
 
 impl YggClient {
 
-    pub fn new(username: String, password: String) -> YggClient {
-        let mut temp = YggClient {website: WEBSITE_BASE_URL,  username, password, cookies: Vec::new() , last_url: "".to_string() , result: vec![], ratio: YggRatio::default() , client:  Agent::new() };
-        temp.login().expect("Can't login");
+    pub async fn new(username: String, password: String) -> YggClient {
+        let mut temp = YggClient {username, password, cookies: Vec::new() , last_url: "".to_string() , result: vec![], ratio: YggRatio::default() };
+        temp.login().await.expect("TODO: panic message");
         temp
     }
 
-    pub async fn change_username(&mut self, username: String) {
+    pub fn change_username(&mut self, username: String) {
         self.username = username;
-        self.login().expect("Can't'login");
+        executor::block_on(self.login()).expect("TODO: panic message");
     }
 
     pub async fn change_password(&mut self, password: String) {
         self.password = password;
-        self.login().expect("Can't login");
+        self.login().await.expect("TODO: panic message");
     }
 
-    pub fn login(&mut self) -> Result<String, String> {
+    pub async fn login(&mut self) -> Result<String, String> {
 
-        let temp = self.website.to_string() + "auth/process_login";
+        let temp = WEBSITE_BASE_URL.to_owned() + "auth/process_login";
         let login_url = temp.as_str();
 
-        let binding1 = self.username.clone();
-        let binding2 = self.password.clone();
-        let params = vec![
-            ("id", binding1.as_str()),
-            ("pass", binding2.as_str()),
-        ];
+        let mut params = HashMap::new();
+        params.insert("id", self.username.clone());
+        params.insert("pass", self.password.clone());
 
-        let query_login = self.client
-            .post(login_url)
-            .set("sec-ch-ua", r#"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"#)
-            .set("User-Agent", USER_AGENT)
-            .send_form(&params)
-            .unwrap();
+        let query_login = Client::new()
+              .post(login_url)
+              .header("sec-ch-ua", r#"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"#)
+              .header("User-Agent", USER_AGENT)
+              .form(&params)
+              .send()
+              .await
+              .unwrap();
+
+
 
         let status  = query_login.status();
         if status != 200 {
             return Err("Status code is ".to_string() + status.to_string().as_str());
         }
 
-        let cookie = query_login.header("set-cookie");
-        println!("{:?}", cookie.unwrap());
+        let cookie = query_login.headers().get("set-cookie");
+        println!("{:?}", cookie.unwrap().clone());
         if cookie.is_some() {
             let mut temp = YggCookie::new();
-            temp.parse(cookie.unwrap());
+            temp.parse(cookie.unwrap().to_str().unwrap());
             self.cookies.push(temp);
         }
         else {
@@ -101,8 +96,8 @@ impl YggClient {
 
     pub async fn get_ratio(&mut self) -> Result<YggRatio, ()> {
 
-        let html = self.client.
-            get(self.website).set("User-Agent", USER_AGENT).set("Cookie", &self.work_cookies().unwrap()).call().unwrap().into_string().unwrap();
+        let html = Client::new().
+            get(WEBSITE_BASE_URL.to_owned()).header("User-Agent", USER_AGENT).header("Cookie", &self.work_cookies().unwrap()).send().await.unwrap().text().await.unwrap();
 
         let document = Html::parse_document(html.as_str());
 
@@ -113,9 +108,9 @@ impl YggClient {
         Ok(ratio)
     }
 
-    pub fn search(&mut self, name: &str, options: Option<YggParams>) -> Vec<YggResult> {
+    pub async fn search(&mut self, name: &str, options: Option<YggParams>) -> Vec<YggResult> {
 
-        let mut search_url = self.website.to_string() + "engine/search?name=" + name + "&do=search";
+        let mut search_url = WEBSITE_BASE_URL.to_owned() + "engine/search?name=" + name + "&do=search";
 
         if options.is_some() {
             let options = options.unwrap();
@@ -126,10 +121,12 @@ impl YggClient {
             search_url = options.concat_to_url(search_url.as_str()).to_string();
         }
 
+        println!("{:?}", search_url);
+
         if self.last_url != search_url {
             self.last_url = search_url.to_string();
             self.result.clear();
-            self.scrape_level_1(search_url);
+            self.scrape_level_1(search_url).await;
         }
 
         self.result.clone()
@@ -138,12 +135,15 @@ impl YggClient {
 
     pub fn download_torrent(&mut self, torrent: YggResult, path: String) -> Result<(), String> {
 
-        let bytes =  self.client.
-            get(torrent.download_link()).set("User-Agent", USER_AGENT).set("Cookie", &self.work_cookies().unwrap()).call().unwrap().into_string().unwrap();
+        let bytes = executor::block_on(async {
+            Client::new().
+                get(torrent.download_link()).header("User-Agent", USER_AGENT).header("Cookie", &self.work_cookies().unwrap()).send().await.unwrap().bytes().await.unwrap()
+        });
 
-        if bytes.eq(&Bytes::from_static("Vous devez vous connecter pour télécharger un torrent".as_bytes())) {
+        if bytes.eq(&"Vous devez vous connecter pour télécharger un torrent".as_bytes().to_vec()) {
             return Err("Please login for download torrent or use magnet".to_string())
         }
+
 
         let filename = path.split("/").last().unwrap();
         let replaced_path = path.replace(filename, "");
@@ -189,7 +189,7 @@ impl YggClient {
         let mut cook = self.create_cookies();
 
         if cook.is_err() {
-            self.login().expect("Login ERROR");
+            executor::block_on(self.login()).expect("TODO: panic message");
             cook = self.create_cookies();
         }
 
@@ -220,13 +220,18 @@ impl YggClient {
         Ok(temp.to_owned())
     }
 
-    fn scrape_level_1(&mut self, url: String) {
+    async fn scrape_level_1(&mut self, url: String) {
         let mut page = 0;
         let mut local_url = url.clone();
+
+        let cookie = Arc::new(self.work_cookies().unwrap());
+
+        let mut handles: Vec<JoinHandle<YggResult>> = vec![];
+
         loop {
 
-            let html = self.client.
-                get(&*local_url).set("User-Agent", USER_AGENT).set("Cookie", &self.work_cookies().unwrap()).call().unwrap().into_string().unwrap();
+            let html = Client::new().
+                get(&*local_url).header("User-Agent", USER_AGENT).header("Cookie", cookie.as_str()).send().await.unwrap().text().await.unwrap();
 
 
             let document = Html::parse_document(html.as_str());
@@ -239,35 +244,48 @@ impl YggClient {
                 local_url = format!("{}&page={}", url.clone(), page * 50).to_string();
 
                 for element in elements {
-                    self.scrape_level_2(get_data(element, LINK_TORRENT_PAGE_ATTRIBUT.clone()));
+                    let element_data = get_data(element, LINK_TORRENT_PAGE_ATTRIBUT.clone());
+                    let cookie_clone = Arc::clone(&cookie);
+
+                    let handle: JoinHandle<YggResult> = tokio::spawn( async move {
+                        Self::scrape_level_2(element_data, cookie_clone.as_str()).await
+                    });
+                    handles.push(handle);
                 }
             } else {
                 break;
             }
         }
+
+        for handle in handles {
+            match handle.await {
+                Ok(data) => self.result.push(data),
+                Err(_) => {}
+            }
+        }
     }
 
-    fn scrape_level_2(&mut self, url: String)  {
+    async fn scrape_level_2(url: String, cookie: &str) -> YggResult  {
 
-        let html = self.client.
-            get(&*url.clone()).set("User-Agent", USER_AGENT).set("Cookie", &*self.work_cookies().unwrap()).call().unwrap().into_string().unwrap();
+        let html = reqwest::Client::new().
+            get(&*url.clone()).header("User-Agent", USER_AGENT).header("Cookie", cookie).send().await.unwrap().text().await.unwrap();
 
         let document = Html::parse_document(html.as_str());
 
         let mut yggresult = YggResult::scrape(document);
 
-        yggresult.set_files(self.scrape_level_3(*yggresult.id()).unwrap());
+        yggresult.set_files(Self::scrape_level_3(*yggresult.id(), cookie).await.unwrap());
 
-        self.result.push(yggresult);
+        yggresult
 
     }
 
-    fn scrape_level_3(&mut self, id: u64) -> Result<Vec<YggResultFile>,()> {
+    async fn scrape_level_3(id: u64, cookie: &str ) -> Result<Vec<YggResultFile>,()> {
         let mut result: Vec<YggResultFile> = Vec::new();
 
-        let url = format!("{}engine/get_files?torrent={}",self.website.to_string() , id);
-        let temp = self.client.
-            get(&*url.clone()).set("User-Agent", USER_AGENT).set("Cookie", &*self.work_cookies().unwrap()).call().unwrap().into_string().unwrap();
+        let url = format!("{}engine/get_files?torrent={}",WEBSITE_BASE_URL.to_owned() , id);
+        let temp = reqwest::Client::new().
+            get(&*url.clone()).header("User-Agent", USER_AGENT).header("Cookie", cookie).send().await.unwrap().text().await.unwrap();
 
         let content: HtmlContent = serde_json::from_str(&temp).unwrap();
 

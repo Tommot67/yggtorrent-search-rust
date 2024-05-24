@@ -1,13 +1,14 @@
 [package]
 name = "yggtorrent-search"
-version = "2.0.0"
+version = "3.0.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ureq = { version = "2.9.7", features = ["json"] }
+reqwest = { version = "0.12.4", features = ["blocking","json"] }
 tokio = { version = "1", features = ["full"] }
+futures = "0.3.30"
 serde = { version = "1.0.201", features = ["derive"] }
 scraper = "0.19.0"
 chrono = "0.4.38"
@@ -15,7 +16,6 @@ lazy_static = "1.4.0"
 getset = "0.1.2"
 serde_json = "1.0.116"
 percent-encoding = "2.3.1"
-async-recursion = "1.1.1"
 bytes = "1.6.0"
 
 [warn]
