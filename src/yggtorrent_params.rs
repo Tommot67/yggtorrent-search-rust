@@ -152,10 +152,10 @@ impl YggSubCategory {
     pub(crate) fn get_base_url(&self) -> &str {
         let value = self.discriminant();
         if value == 0 {
-            "&subcategory=all"
+            "&sub_category=all"
         }
         else {
-            let base_url = format!("&subcategory={}", value);
+            let base_url = format!("&sub_category={}", value);
             Box::leak(base_url.into_boxed_str())
         }
     }
@@ -277,7 +277,7 @@ impl YggParams {
 
     fn get_uploader_base_url(&self) -> &str {
         if self.uploader.is_none() {
-            "&uploader="
+            "" //&uploader=
         }
         else {
             let base_url = format!("&uploader={}", self.uploader.unwrap());
