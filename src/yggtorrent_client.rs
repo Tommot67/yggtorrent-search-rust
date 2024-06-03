@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::sync::Arc;
+use async_recursion::async_recursion;
 use futures::executor;
 use percent_encoding::{NON_ALPHANUMERIC, utf8_percent_encode};
 use reqwest::Client;
@@ -9,8 +10,8 @@ use reqwest::Client;
 use crate::data_struct::yggtorrent_cookie::YggCookie;
 
 use scraper::{Html, Selector};
-use tokio::task;
-use tokio::task::{JoinHandle, spawn_blocking};
+use tokio::task::{JoinHandle};
+use undetected_chromedriver::{Chrome, UndetectedChrome, UndetectedChromeUsage};
 use crate::data_struct::yggtorrent_ratio::YggRatio;
 use crate::data_struct::yggtorrent_result::{HtmlContent, YggResult, YggResultFile};
 use crate::yggtorrent_params::YggParams;
@@ -25,7 +26,8 @@ const USER_AGENT: &'static str = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/53
 pub struct YggClient {
     username: String,
     password: String,
-    cookies: Vec<YggCookie>,
+    login_cookies: Vec<YggCookie>,
+    cloudflare_cookies: Vec<YggCookie>,
     last_url: String,
     result: Vec<YggResult>,
     ratio: YggRatio,
@@ -36,14 +38,15 @@ pub struct YggClient {
 impl YggClient {
 
     pub async fn new(username: String, password: String) -> YggClient {
-        let mut temp = YggClient {username, password, cookies: Vec::new() , last_url: "".to_string() , result: vec![], ratio: YggRatio::default() };
+        let mut temp = YggClient {username, password, login_cookies: Vec::new() , cloudflare_cookies: Vec::new() , last_url: "".to_string() , result: vec![], ratio: YggRatio::default() };
+        temp.get_clearence().await.expect("TODO: panic message");
         temp.login().await.expect("TODO: panic message");
         temp
     }
 
-    pub fn change_username(&mut self, username: String) {
+    pub async fn change_username(&mut self, username: String) {
         self.username = username;
-        executor::block_on(self.login()).expect("TODO: panic message");
+        self.login().await.expect("TODO: panic message");
     }
 
     pub async fn change_password(&mut self, password: String) {
@@ -51,6 +54,7 @@ impl YggClient {
         self.login().await.expect("TODO: panic message");
     }
 
+    #[async_recursion]
     pub async fn login(&mut self) -> Result<String, String> {
 
         let temp = WEBSITE_BASE_URL.to_owned() + "auth/process_login";
@@ -64,6 +68,7 @@ impl YggClient {
               .post(login_url)
               .header("sec-ch-ua", r#"Google Chrome";v="125", "Chromium";v="125", "Not.A/Brand";v="24"#)
               .header("User-Agent", USER_AGENT)
+              .header("Cookie", &self.work_cookies(false).await.unwrap())
               .form(&params)
               .send()
               .await
@@ -76,15 +81,16 @@ impl YggClient {
             return Err("Status code is ".to_string() + status.to_string().as_str());
         }
 
-        let cookie = query_login.headers().get("set-cookie");
-        println!("{:?}", cookie.unwrap().clone());
-        if cookie.is_some() {
-            let mut temp = YggCookie::new();
-            temp.parse(cookie.unwrap().to_str().unwrap());
-            self.cookies.push(temp);
-        }
-        else {
-            return Err("Not cookie found !".to_string());
+        if self.cloudflare_cookies.is_empty() {
+            let cookie = query_login.headers().get("set-cookie");
+            //println!("{:?}", cookie.unwrap().clone());
+            if cookie.is_some() {
+                let mut temp = YggCookie::new();
+                temp.parse(cookie.unwrap().to_str().unwrap());
+                self.login_cookies.push(temp);
+            } else {
+                return Err("Not cookie found !".to_string());
+            }
         }
 
         let mut temp = "User ".to_owned();
@@ -97,7 +103,7 @@ impl YggClient {
     pub async fn get_ratio(&mut self) -> Result<YggRatio, ()> {
 
         let html = Client::new().
-            get(WEBSITE_BASE_URL.to_owned()).header("User-Agent", USER_AGENT).header("Cookie", &self.work_cookies().unwrap()).send().await.unwrap().text().await.unwrap();
+            get(WEBSITE_BASE_URL.to_owned()).header("User-Agent", USER_AGENT).header("Cookie", &self.work_cookies(true).await.unwrap()).send().await.unwrap().text().await.unwrap();
 
         let document = Html::parse_document(html.as_str());
 
@@ -137,7 +143,7 @@ impl YggClient {
 
         let bytes = executor::block_on(async {
             Client::new().
-                get(torrent.download_link()).header("User-Agent", USER_AGENT).header("Cookie", &self.work_cookies().unwrap()).send().await.unwrap().bytes().await.unwrap()
+                get(torrent.download_link()).header("User-Agent", USER_AGENT).header("Cookie", &self.work_cookies(true).await.unwrap()).send().await.unwrap().bytes().await.unwrap()
         });
 
         if bytes.eq(&"Vous devez vous connecter pour télécharger un torrent".as_bytes().to_vec()) {
@@ -185,12 +191,18 @@ impl YggClient {
         self.ratio.clone()
     }
 
-    fn work_cookies(&mut self) -> Result<String, ()> {
-        let mut cook = self.create_cookies();
+    async fn work_cookies(&mut self, with_login: bool) -> Result<String, ()> {
+        let mut cook = self.create_cookies(with_login);
 
         if cook.is_err() {
-            executor::block_on(self.login()).expect("TODO: panic message");
-            cook = self.create_cookies();
+            if cook.clone().err().unwrap().1 == "login" {
+                self.login().await.expect("TODO: panic message");
+                cook = self.create_cookies(with_login);
+            }
+            else if cook.clone().err().unwrap().1 == "cloudflare" {
+                self.get_clearence().await.expect("TODO: panic message");
+                cook = self.create_cookies(with_login);
+            }
         }
 
         if cook.is_err() {
@@ -200,15 +212,56 @@ impl YggClient {
         Ok(cook.unwrap())
     }
 
-    fn create_cookies(&self) -> Result<String, &str> {
+    async fn get_clearence(&mut self) -> Result<(), ()>  {
+        let mut temp = UndetectedChrome::new(UndetectedChromeUsage::WINDOWS(false)).await;
+        temp.bypass_cloudflare(&*WEBSITE_BASE_URL.to_owned(), Some(r#"img[src="/assets/img/logov2.svg"]"#)).await.unwrap();
+
+        let webdriver =  temp.borrow();
+
+        match webdriver.get_all_cookies().await {
+            Ok(cookies) => {
+                self.cloudflare_cookies.clear();
+                for cookie in cookies {
+                    let mut yggcookie = YggCookie::new();
+                    yggcookie.parse(cookie.to_string().as_str());
+                    println!("{:?}", cookie.to_string().as_str());
+                    self.cloudflare_cookies.push(yggcookie);
+                }
+            },
+            Err(e) => {
+                println!("Error: {}", e);
+                temp.kill().await;
+                return Err(())
+            }
+        }
+        temp.kill().await;
+
+       Ok(())
+    }
+
+    fn create_cookies(&self, with_login: bool) -> Result<String, (&str, &str)> {
 
         let mut temp: String = "".to_string();
 
-        for yggcookie in &self.cookies {
+        if with_login {
+
+            for yggcookie in &self.login_cookies {
+                let data = yggcookie.get_cookie();
+
+                if data.is_err() {
+                    return Err(("Invalid cookie", "login"));
+                }
+
+                temp.push_str(data.unwrap());
+                temp.push_str("; ");
+            }
+        }
+
+        for yggcookie in &self.cloudflare_cookies {
             let data = yggcookie.get_cookie();
 
             if data.is_err() {
-                return Err("Invalid cookie");
+                return Err(("Invalid cookie", "cloudlfare"));
             }
 
             temp.push_str(data.unwrap());
@@ -224,7 +277,7 @@ impl YggClient {
         let mut page = 0;
         let mut local_url = url.clone();
 
-        let cookie = Arc::new(self.work_cookies().unwrap());
+        let cookie = Arc::new(self.work_cookies(true).await.unwrap());
 
         let mut handles: Vec<JoinHandle<YggResult>> = vec![];
 
