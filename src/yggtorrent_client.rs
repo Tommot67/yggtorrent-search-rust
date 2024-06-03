@@ -83,7 +83,6 @@ impl YggClient {
 
         if self.cloudflare_cookies.is_empty() {
             let cookie = query_login.headers().get("set-cookie");
-            //println!("{:?}", cookie.unwrap().clone());
             if cookie.is_some() {
                 let mut temp = YggCookie::new();
                 temp.parse(cookie.unwrap().to_str().unwrap());
@@ -213,7 +212,7 @@ impl YggClient {
     }
 
     async fn get_clearence(&mut self) -> Result<(), ()>  {
-        let mut temp = UndetectedChrome::new(UndetectedChromeUsage::WINDOWS(false)).await;
+        let mut temp = UndetectedChrome::new(UndetectedChromeUsage::CLOUDFLAREBYPASSER).await;
         temp.bypass_cloudflare(&*WEBSITE_BASE_URL.to_owned(), Some(r#"img[src="/assets/img/logov2.svg"]"#)).await.unwrap();
 
         let webdriver =  temp.borrow();
